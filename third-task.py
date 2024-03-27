@@ -5,14 +5,32 @@ api_key = '40d1649f-0493-4b70-98ba-98533de7710b'
 
 
 def change_zoom(coords, zoom, k):
-    zoom = str(int(zoom) + k * 1)
-    if zoom == "-1":
-        zoom = "0"
+    zoom += k
+    if zoom == -1:
+        zoom = 0
+    if zoom == 22:
+        zoom = 21
     response = get_image(coords, zoom)
     map_file = "map.png"
     with open(map_file, "wb") as file:
         file.write(response.content)
-    return map_file
+    return map_file, zoom
+
+
+def change_dir(coords, zoom, direction, k, w, h):
+    print(coords)
+    if not direction:
+        x = str(float(coords[0]) + float(coords[0]) / zoom * k)
+        coords = (x, coords[1])
+    else:
+        y = str(float(coords[1]) + float(coords[1]) / zoom * k)
+        coords = (coords[0], y)
+    print(coords)
+    response = get_image(coords, zoom)
+    map_file = "map.png"
+    with open(map_file, "wb") as file:
+        file.write(response.content)
+    return map_file, zoom, coords
 
 
 def geocode(adress):
@@ -38,53 +56,75 @@ def get_adress_coords(address):
     return toponym_coords
 
 
-def get_image(geocords, zoom):
+def get_image(zoom, geocords):
     map_request = "http://static-maps.yandex.ru/1.x/"
-
     map_params = {
         "ll": ",".join([str(el) for el in geocords]),
         "l": "map",
         "z": str(zoom)
     }
-
+    map_file = "map.png"
     response = requests.get(map_request, params=map_params)
-    return response
+    with open("map.png", "wb") as file:
+        file.write(response.content)
+    return map_file
 
 
 if __name__ == '__main__':
-    coords = tuple(input("Введите ширину и долготу объекта ").split())
-    zoom = input("Укажите приближение от 0 до 21 ")
-    response = get_image(coords, zoom)
-    print(coords, zoom)
+    offset_multipliyer = 2 ** 12
+    OFFSET_COORD = 4096 / 100
+    prev_coords = (0, 0)
+    coords = tuple(map(float, input("Введите ширину и долготу объекта ").split()))
+    ZOOM = int(input("Укажите приближение от 0 до 21 "))
+    response = get_image(ZOOM, coords)
+    # w, h = input('Введите длину онак '), input('Введите ширину окна ')
+    print(coords, ZOOM)
+    delta_loc = (2.196 ** ZOOM) * 0.038
     map_file = "map.png"
-    with open(map_file, "wb") as file:
-        file.write(response.content)
     pygame.init()
     screen = pygame.display.set_mode((600, 450))
-    screen.blit(pygame.image.load(map_file), (0, 0))
+    screen.blit(pygame.image.load(get_image(ZOOM, coords)), (0, 0))
     pygame.display.flip()
     running = True
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            elif event.type == pygame.KEYDOWN:
-                print(event.key)
-                if event.key == pygame.K_PAGEDOWN:
-                    map_file = change_zoom(coords, zoom, -1)
-                    screen.blit(pygame.image.load(map_file), (0, 0))
-                elif event.key == pygame.K_PAGEUP:
-                    map_file = change_zoom(coords, zoom, 1)
-                    screen.blit(pygame.image.load(map_file), (0, 0))
-                elif event.key == pygame.K_w:
-                    pass
-                elif event.key == pygame.K_s:
-                    pass
-                elif event.key == pygame.K_a:
-                    pass
-                elif event.key == pygame.K_d:
-                    pass
+            if event.type == pygame.KEYDOWN:
+                print(ZOOM)
+                if event.key == 1073741906:
+                    ZOOM -= 1
+                    offset_multipliyer /= 2
+                    offset_multipliyer = max(min(2 ** 21, offset_multipliyer), 1)
+                    ZOOM = max(min(21, ZOOM), 0)
+                    map_file = get_image(ZOOM, coords)
+                if event.key == 1073741905:
+                    ZOOM += 1
+                    offset_multipliyer *= 2
+                    offset_multipliyer = max(min(2 ** 21, offset_multipliyer), 1)
+                    ZOOM = max(min(21, ZOOM), 0)
+                    map_file = get_image(ZOOM, coords)
+                if event.key == pygame.K_w:
+                    x, y = coords
+                    coords = x, max(min(89, y + delta_loc), -89)
+                    map_file = get_image(ZOOM, coords)
+                if event.key == pygame.K_s:
+                    x, y = coords
+                    coords = x, max(min(89, y - delta_loc), -89)
+                    map_file = get_image(ZOOM, coords)
+                if event.key == pygame.K_d:
+                    x, y = coords
+                    coords = max(min(84, x + delta_loc), -84), y
+                    map_file = get_image(ZOOM, coords)
+                if event.key == pygame.K_a:
+                    x, y = coords
+                    coords = max(min(84, x - delta_loc), -84), y
+                    map_file = get_image(ZOOM, coords)
+                delta_loc = ((0.03 ** (1 / 7)) ** ZOOM) * 16
+                print(coords)
+                screen.blit(pygame.image.load(map_file), (0, 0))
 
         pygame.display.flip()
 
     pygame.quit()
+# ло
